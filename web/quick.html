@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>PromptBuilder QuickPick</title>
+<script>
+  window.__pbPage = "quick";
+  /* theme before first paint: cached in localStorage (no URL query, see index.html) */
+  (function () {
+    var t = "system";
+    try { t = localStorage.getItem("pb.theme") || "system"; } catch (e) {}
+    if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+  })();
+</script>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/quick.css">
+</head>
+<body>
+<div class="qp" id="qp" role="dialog" aria-label="插入提示词">
+  <div class="qp-search">
+    <i class="ic qp-ico" data-icon="search" data-size="16"></i>
+    <input id="q" placeholder="搜索提示词…" autocomplete="off" spellcheck="false" aria-label="搜索提示词" role="combobox" aria-controls="list" aria-expanded="true">
+    <kbd id="hkHint">//</kbd>
+  </div>
+  <div class="qp-list" id="list" role="listbox" aria-label="提示词"></div>
+  <div class="qp-form hidden" id="form">
+    <div class="qp-form-head"><button class="qp-back" id="back" title="返回列表 (Esc)" aria-label="返回列表"><i class="ic" data-icon="chevLeft" data-size="16"></i></button><b id="formTitle"></b><span class="spacer"></span><span class="qp-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 插入</span></div>
+    <div class="qp-ai" id="aiFill">
+      <label class="qp-ai-lab" for="aiNeed"><i class="ic" data-icon="sparkles" data-size="13"></i>用 AI 填表</label>
+      <div class="qp-ai-row">
+        <textarea id="aiNeed" class="textarea qp-ai-ta" rows="2" placeholder="用一句话描述需求，AI 帮你填下面的表单…" spellcheck="false"></textarea>
+        <button type="button" class="btn secondary sm" id="aiFillBtn" title="根据描述自动填写下方字段"><i class="ic" data-icon="sparkles" data-size="13"></i>AI 填写</button>
+      </div>
+      <div class="qp-ai-msg" id="aiFillMsg" aria-live="polite"></div>
+    </div>
+    <div class="qp-fields" id="fields"></div>
+    <div class="qp-form-foot"><span class="spacer"></span><button class="btn primary sm" id="insertBtn"><i class="ic" data-icon="cornerDownLeft" data-size="14"></i>插入</button></div>
+  </div>
+  <div class="qp-foot" id="foot"></div>
+</div>
+<script src="js/icons.js"></script>
+<script src="js/quick.js"></script>
+</body>
+</html>

@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>提示词 Builder</title>
+<script>
+  /* Page marker: the host checks it after load to prove the real UI (not an error page) is shown. */
+  window.__pbPage = "main";
+  /* Resolve the theme before first paint (no flash). No URL query string: WebView2 on Windows
+     percent-encodes "?" in file:// URLs (2.6.0 bug). The last theme is cached in localStorage;
+     the real setting arrives from the host right after load. */
+  (function () {
+    var t = "system";
+    try { t = localStorage.getItem("pb.theme") || "system"; } catch (e) {}
+    if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+  })();
+</script>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<a class="skip" href="#editor">跳到编辑器</a>
+<div id="app">
+  <header class="titlebar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">//</div>
+      <div class="brand-text"><span class="brand-title">提示词 Builder</span><span class="brand-ver" id="ver">—</span></div>
+    </div>
+    <span class="spacer"></span>
+    <button class="status-pill" id="quickPill" title="// 唤醒状态（点击打开设置）"><span class="dot"></span><span id="quickPillText">正在启动…</span></button>
+    <span class="admin-chip hidden" id="adminChip" title="正在以管理员身份运行：在管理员窗口中也能用 // 唤醒"><i class="ic" data-icon="shield" data-size="14"></i>管理员</span>
+    <div class="tb-panel-toggles" role="group" aria-label="面板显示">
+      <button class="btn ghost icon" id="toggleListBtn" title="显示/隐藏提示词库" aria-pressed="true" aria-label="显示/隐藏提示词库"><i class="ic" data-icon="list" data-size="15"></i></button>
+      <button class="btn ghost icon" id="toggleSideBtn" title="显示/隐藏测试面板" aria-pressed="true" aria-label="显示/隐藏测试面板"><i class="ic" data-icon="eye" data-size="15"></i></button>
+    </div>
+    <div class="tb-actions" role="toolbar" aria-label="应用操作">
+      <div class="tb-group" role="group" aria-label="库与数据">
+        <div class="menu-wrap">
+          <button class="btn ghost icon" id="ioBtn" title="导入 / 导出与维护" aria-haspopup="menu" aria-expanded="false" aria-label="导入导出与维护"><i class="ic" data-icon="archive" data-size="15"></i></button>
+          <div class="menu hidden" id="ioMenu" role="menu">
+            <div class="menu-label">导入</div>
+            <button role="menuitem" data-io="import-json"><i class="ic" data-icon="import" data-size="14"></i>提示词库 (JSON)…</button>
+            <button role="menuitem" data-io="import-md"><i class="ic" data-icon="file" data-size="14"></i>Markdown 文件…</button>
+            <div class="menu-sep"></div>
+            <div class="menu-label">导出</div>
+            <button role="menuitem" data-io="export-json"><i class="ic" data-icon="export" data-size="14"></i>整个提示词库 (JSON)…</button>
+            <button role="menuitem" data-io="export-md"><i class="ic" data-icon="file" data-size="14"></i>当前提示词 (.md)…</button>
+            <div class="menu-sep"></div>
+            <div class="menu-label">维护</div>
+            <button role="menuitem" data-io="backup"><i class="ic" data-icon="archive" data-size="14"></i>完整备份 (ZIP)…</button>
+            <button role="menuitem" data-io="restore"><i class="ic" data-icon="undo" data-size="14"></i>从备份恢复…</button>
+          </div>
+        </div>
+      </div>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-group" role="group" aria-label="AI">
+        <button class="btn ghost sm" id="aiBtn" title="AI 工作室 (Ctrl+Shift+A)：生成 / 改写 / 评审" aria-pressed="false" aria-label="AI 工作室"><i class="ic" data-icon="sparkles" data-size="14"></i><span class="tb-ai-label">AI</span></button>
+      </div>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-group" role="group" aria-label="系统">
+        <button class="btn ghost icon" id="helpBtn" title="帮助与快捷键 (F1)" aria-label="帮助与快捷键"><i class="ic" data-icon="help"></i></button>
+        <button class="btn ghost icon" id="themeBtn" title="主题" aria-label="切换主题"><i class="ic" id="themeIcon"></i></button>
+        <button class="btn ghost icon" id="settingsBtn" title="设置 (Ctrl+,)" aria-label="设置"><i class="ic" data-icon="settings"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- left: prompt library -->
+    <section class="panel" id="listPanel" aria-label="提示词库">
+      <div class="panel-head lib-head" id="libHead">
+        <div class="lib-head-title">
+          <span class="panel-title" id="libTitle">提示词</span>
+          <span class="count" id="listCount" title="当前筛选下的提示词数" aria-label="数量"></span>
+        </div>
+        <div class="lib-head-actions" id="libFilters">
+          <div class="menu-wrap sort-wrap">
+            <select class="input sort-sel" id="sortSel" aria-label="排序方式" title="排序">
+              <option value="recent">最近使用</option>
+              <option value="updated">最近更新</option>
+              <option value="name">名称</option>
+            </select>
+            <button class="btn ghost icon sort-compact-btn" id="sortCompactBtn" title="排序" aria-label="排序" aria-haspopup="menu" aria-expanded="false"><i class="ic" data-icon="list" data-size="14"></i></button>
+            <div class="menu hidden" id="sortCompactMenu" role="menu" aria-label="排序方式">
+              <button role="menuitem" data-sort="recent">最近使用</button>
+              <button role="menuitem" data-sort="updated">最近更新</button>
+              <button role="menuitem" data-sort="name">名称 A–Z</button>
+            </div>
+          </div>
+          <button class="btn ghost icon" id="newRoleBtn" title="新建角色" aria-label="新建角色"><i class="ic" data-icon="folder" data-size="14"></i></button>
+          <button class="btn ghost icon lib-new" id="newBtn" title="新建提示词 (Ctrl+N)" aria-label="新建提示词 (Ctrl+N)"><i class="ic" data-icon="plus" data-size="14"></i></button>
+        </div>
+      </div>
+      <div class="lib-search">
+        <div class="search">
+          <i class="ic search-ic" data-icon="search" data-size="14"></i>
+          <input class="input" id="search" placeholder="搜索名称、关键词、标签或正文" autocomplete="off" spellcheck="false" aria-label="搜索提示词">
+          <kbd class="search-kbd" id="searchKbd">Ctrl F</kbd>
+          <button class="search-clear hidden" id="searchClear" title="清除 (Esc)" aria-label="清除搜索"><i class="ic" data-icon="x" data-size="14"></i></button>
+        </div>
+      </div>
+      <div class="lib-scope" id="libScope" role="tablist" aria-label="库范围">
+        <button type="button" role="tab" class="lib-scope-tab" id="libScopeAll" data-scope="all" aria-selected="true" tabindex="0">全部</button>
+        <button type="button" role="tab" class="lib-scope-tab" id="libScopeFav" data-scope="fav" aria-selected="false" tabindex="-1">收藏</button>
+        <button type="button" role="tab" class="lib-scope-tab" id="libScopeArch" data-scope="archived" aria-selected="false" tabindex="-1">归档</button>
+      </div>
+      <div class="tag-bar" id="tagBar" hidden></div>
+      <div class="starters" id="starters" hidden></div>
+      <div class="list tree" id="list" role="tree" tabindex="0" aria-label="角色 › 提示词"></div>
+    </section>
+
+    <div class="splitter" id="splitList" data-split="list" role="separator" aria-orientation="vertical" aria-label="调整提示词库宽度" title="拖动调整宽度 · 双击恢复默认"></div>
+
+    <!-- middle: markdown editor -->
+    <section class="panel" id="editorPanel" aria-label="编辑器">
+      <div class="crumb" id="crumb" hidden><span id="crumbRole"></span><span class="crumb-sep" hidden>›</span><span id="crumbCat" hidden></span></div>
+      <div class="panel-head editor-head" id="editorHead">
+        <div class="editor-head-left">
+          <input class="title-input" id="titleInput" placeholder="未命名提示词" spellcheck="false" maxlength="80" aria-label="提示词名称">
+          <span class="save-state" id="saveState" role="status"></span>
+          <button class="btn ghost sm hidden" id="copyBuiltinBtn" title="内置提示词只读，复制后可编辑">复制后编辑</button>
+        </div>
+        <div class="editor-head-actions">
+          <button class="btn ghost icon flag-btn" id="favBtn" title="收藏" aria-pressed="false" aria-label="收藏"><i class="ic" data-icon="star"></i></button>
+          <div class="menu-wrap">
+            <button class="btn ghost sm" id="insertBtn" aria-haspopup="menu" aria-expanded="false" title="插入变量 (Ctrl+I)"><i class="ic" data-icon="braces" data-size="14"></i>变量<i class="ic" data-icon="chevDown" data-size="12"></i></button>
+            <div class="menu insert-menu hidden" id="insertMenu" role="menu" aria-label="插入变量"></div>
+          </div>
+          <div class="menu-wrap">
+            <button class="btn ghost icon" id="editorMoreBtn" title="更多操作" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作"><i class="ic" data-icon="more" data-size="14"></i></button>
+            <div class="menu hidden" id="editorMoreMenu" role="menu" aria-label="更多操作">
+              <button role="menuitem" id="copyResultMenuBtn" title="复制渲染结果 (Ctrl+Enter)"><i class="ic" data-icon="copy" data-size="14"></i>复制结果</button>
+              <button role="menuitem" id="syntaxBtn" title="变量语法说明"><i class="ic" data-icon="help" data-size="14"></i>语法说明</button>
+              <button role="menuitem" id="revBtn" title="版本历史"><i class="ic" data-icon="history" data-size="14"></i>版本历史</button>
+              <button role="menuitem" class="flag-btn" id="pinBtn" title="置顶（浮框优先）" aria-pressed="false"><i class="ic" data-icon="pin" data-size="14"></i>置顶</button>
+              <div class="menu-sep"></div>
+              <button role="menuitem" id="archBtn" title="归档此提示词"><i class="ic" data-icon="archive" data-size="14"></i>归档</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="meta-row" id="metaRow" hidden>
+        <div class="meta-block tags-row" id="tagsRow">
+          <span class="meta-label" title="分类标签">标签</span>
+          <div class="tags-chips" id="tagsChips"></div>
+          <input class="input tags-input" id="tagsInput" placeholder="添加标签" maxlength="32" spellcheck="false" aria-label="添加标签">
+        </div>
+      </div>
+      <div class="md-toolbar" id="mdToolbar" role="toolbar" aria-label="Markdown 格式">
+        <button type="button" class="btn ghost icon md-tool" data-md="h2" title="标题" aria-label="标题" disabled><i class="ic" data-icon="hash" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="bold" title="粗体" aria-label="粗体" disabled><i class="ic" data-icon="bold" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="italic" title="斜体" aria-label="斜体" disabled><i class="ic" data-icon="italic" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="strike" title="删除线" aria-label="删除线" disabled><i class="ic" data-icon="strike" data-size="14"></i></button>
+        <span class="md-sep" aria-hidden="true"></span>
+        <button type="button" class="btn ghost icon md-tool" data-md="code" title="行内代码" aria-label="行内代码" disabled><i class="ic" data-icon="code" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="codeblock" title="代码块" aria-label="代码块" disabled><i class="ic" data-icon="fileText" data-size="14"></i></button>
+        <span class="md-sep" aria-hidden="true"></span>
+        <button type="button" class="btn ghost icon md-tool" data-md="ul" title="无序列表" aria-label="无序列表" disabled><i class="ic" data-icon="list" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="ol" title="有序列表" aria-label="有序列表" disabled><i class="ic" data-icon="listOrdered" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="quote" title="引用" aria-label="引用" disabled><i class="ic" data-icon="quote" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="link" title="链接" aria-label="链接" disabled><i class="ic" data-icon="link" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="table" title="表格" aria-label="表格" disabled><i class="ic" data-icon="table" data-size="14"></i></button>
+        <button type="button" class="btn ghost icon md-tool" data-md="hr" title="分隔线" aria-label="分隔线" disabled><i class="ic" data-icon="minus" data-size="14"></i></button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost sm" id="mdPreviewToggle" title="显示/隐藏正文 Markdown 预览" aria-pressed="true" disabled><i class="ic" data-icon="eye" data-size="14"></i>预览</button>
+      </div>
+      <div class="editor-stack" id="editorStack">
+        <div class="editor" id="editorWrap">
+          <div class="gutter" id="gutter" aria-hidden="true">1</div>
+          <div class="editor-body">
+            <pre class="editor-hl" id="editorHL" aria-hidden="true"></pre>
+            <textarea id="editor" spellcheck="false" aria-label="提示词正文（Markdown）" placeholder="用 Markdown 写提示词，需要每次替换的地方写成 {{变量}}。&#10;&#10;例如：请把下面的内容翻译成{{目标语言:英文/日文/韩文|英文}}：&#10;{{原文:多行}}"></textarea>
+          </div>
+          <div class="editor-empty hidden" id="editorEmpty"></div>
+        </div>
+        <div class="splitter h-split" id="splitMd" role="separator" aria-orientation="horizontal" aria-label="调整正文预览高度" title="拖动调整高度 · 双击恢复默认"></div>
+        <div class="md-preview-pane" id="mdPreviewPane" aria-label="正文 Markdown">
+          <div class="md-preview-label">正文 Markdown</div>
+          <div class="markdown md-live" id="mdLivePreview" tabindex="-1"></div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>变量 <b id="sbVars">0</b></span>
+        <span>必填 <b id="sbReq">0</b></span>
+        <span>字符 <b id="sbChars">0</b></span>
+        <span>行 <b id="sbLines">0</b></span>
+        <span class="spacer"></span>
+        <span id="sbCursor">行 1，列 1</span>
+      </div>
+    </section>
+
+    <div class="splitter" id="splitSide" data-split="side" role="separator" aria-orientation="vertical" aria-label="调整测试面板宽度" title="拖动调整宽度 · 双击恢复默认"></div>
+
+    <!-- right: form / preview / debug -->
+    <section class="panel" id="sidePanel" aria-label="测试">
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" data-tab="form" title="表单 (Ctrl+1)"><i class="ic" data-icon="list" data-size="14"></i>表单<span class="badge" id="badgeForm">0</span></button>
+        <button class="tab" role="tab" data-tab="preview" title="预览 (Ctrl+2)"><i class="ic" data-icon="eye" data-size="14"></i>预览</button>
+        <button class="tab" role="tab" data-tab="debug" title="调试 (Ctrl+3)"><i class="ic" data-icon="bug" data-size="14"></i>调试<span class="badge" id="badgeDebug">0</span></button>
+      </div>
+      <div class="tab-body" id="tab-form" role="tabpanel"></div>
+      <div class="tab-body flush hidden" id="tab-preview" role="tabpanel">
+        <div class="subbar">
+          <span class="subbar-info" id="previewInfo"></span>
+          <span class="role-sys-chip hidden" id="roleSysChip" title="预览/复制已前置角色系统提示">含角色设定</span>
+          <label class="mini-check" title="复制、预览与 AI 时前置当前角色的系统提示"><input type="checkbox" id="applyRoleSysToggle" checked>应用角色系统提示</label>
+          <label class="mini-check" title="高亮显示哪些文字来自变量：绿色=已填写，蓝色=默认值，红色=未填写"><input type="checkbox" id="markToggle" checked>标记变量</label>
+          <div class="seg sm" role="group" aria-label="预览方式"><button data-view="text" class="active">纯文本</button><button data-view="md">Markdown</button></div>
+          <button class="btn ghost icon" id="copyBtn" title="复制渲染结果 (Ctrl+Enter)" aria-label="复制渲染结果"><i class="ic" data-icon="copy" data-size="14"></i></button>
+        </div>
+        <pre class="preview-text" id="previewText"></pre>
+        <div class="markdown hidden" id="previewMd"></div>
+      </div>
+      <div class="tab-body hidden" id="tab-debug" role="tabpanel"></div>
+      <div class="panel-foot" id="formFoot">
+        <button class="btn secondary sm" id="saveValuesBtn" title="把当前测试值保存到此提示词，下次打开自动填入">保存测试值</button>
+        <button class="btn ghost sm" id="resetValuesBtn">清空</button>
+        <span class="spacer"></span>
+        <span class="foot-note" id="valuesState"></span>
+      </div>
+    </section>
+
+    <!-- AI studio: right drawer with independent width -->
+    <aside class="panel ai-drawer" id="aiPanel" hidden aria-label="AI 工作室">
+      <div class="ai-resize" id="aiResize" title="拖动调整宽度 · 双击恢复默认" aria-hidden="true"></div>
+      <div class="panel-head ai-drawer-head">
+        <div class="seg ai-tabs" role="tablist" id="aiTabs" aria-label="AI 工作室">
+          <button type="button" data-ai="gen" class="active">生成</button>
+          <button type="button" data-ai="rewrite">改写</button>
+          <button type="button" data-ai="review">评审</button>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn ghost icon" id="aiOpenSettings" title="在设置中配置默认模型与 API Key" aria-label="AI 模型设置"><i class="ic" data-icon="settings" data-size="14"></i></button>
+        <button class="btn ghost icon" id="aiCloseBtn" aria-label="关闭 AI 工作室"><i class="ic" data-icon="x"></i></button>
+      </div>
+      <div class="ai-drawer-body" id="aiBody"></div>
+      <div class="panel-foot" id="aiFoot">
+        <span class="muted small" id="aiStatus"></span>
+        <span class="spacer"></span>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- settings -->
+<div class="overlay hidden" id="settingsOverlay">
+  <div class="modal settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-head"><h2 id="settingsTitle">设置</h2><span class="spacer"></span><button class="btn ghost icon" data-close aria-label="关闭"><i class="ic" data-icon="x"></i></button></div>
+    <div class="settings-body">
+      <nav class="settings-nav" role="tablist" aria-label="设置分类">
+        <button class="active" data-sec="trigger"><i class="ic" data-icon="zap" data-size="15"></i>唤醒</button>
+        <button data-sec="look"><i class="ic" data-icon="palette" data-size="15"></i>外观</button>
+        <button data-sec="library"><i class="ic" data-icon="list" data-size="15"></i>提示词库</button>
+        <button data-sec="ai"><i class="ic" data-icon="sparkles" data-size="15"></i>AI 模型</button>
+        <button data-sec="startup"><i class="ic" data-icon="power" data-size="15"></i>启动与权限</button>
+        <button data-sec="about"><i class="ic" data-icon="info" data-size="15"></i>关于</button>
+      </nav>
+      <div class="settings-pane">
+        <section data-pane="trigger">
+          <div class="row"><div class="row-main"><div class="row-label">启用 // 唤醒</div><div class="row-desc">在任意输入框快速输入两个斜杠，弹出提示词浮框。关闭后 // 只是普通文字。</div></div>
+            <label class="switch"><input type="checkbox" id="setEnabled" aria-label="启用 // 唤醒"><span class="slider"></span></label></div>
+          <div class="row"><div class="row-main"><div class="row-label">唤醒方式</div><div class="row-desc">0.5 秒内连续输入 <b>//</b>（小键盘 / 也算）。<code>https://</code> 这类冒号后的斜杠不会触发。选中提示词后自动删掉 // 再插入；按 Esc 取消则保留 //。</div></div>
+            <kbd class="trigger-kbd">//</kbd></div>
+          <div class="row"><div class="row-main"><div class="row-label">浮框位置</div><div class="row-desc">跟随文本光标（取不到时退回鼠标位置），或总是跟随鼠标。</div></div>
+            <div class="seg" id="setFollow" role="group" aria-label="浮框位置"><button data-v="caret">跟随光标</button><button data-v="mouse">跟随鼠标</button></div></div>
+          <div class="row"><div class="row-main"><div class="row-label">列表显示正文预览</div><div class="row-desc">浮框中每条提示词下方显示一行正文。</div></div>
+            <label class="switch"><input type="checkbox" id="setPreview" aria-label="列表显示正文预览"><span class="slider"></span></label></div>
+          <div class="row"><div class="row-main"><div class="row-label">全屏程序中不唤醒</div><div class="row-desc">游戏、幻灯片放映、全屏视频时输入 // 不弹出。</div></div>
+            <label class="switch"><input type="checkbox" id="setFullscreen" aria-label="全屏程序中不唤醒"><span class="slider"></span></label></div>
+          <div class="row col"><div class="row-main"><div class="row-label">排除的程序</div><div class="row-desc">在这些程序里输入 // 不会弹出。也可以在浮框里点「在此程序中停用」。</div></div>
+            <div class="chips" id="excludeChips"></div>
+            <div class="exclude-add">
+              <input class="input" id="excludeInput" placeholder="输入 exe 文件名，例如 Code.exe，回车添加" spellcheck="false" autocomplete="off" aria-label="添加排除的程序">
+              <button class="btn secondary" id="excludeAdd">添加</button>
+            </div>
+            <div class="presets" id="excludePresets"></div>
+          </div>
+          <details class="diag"><summary>诊断信息</summary><div class="note" id="hookNote">—</div></details>
+        </section>
+        <section data-pane="look" class="hidden">
+          <div class="row"><div class="row-main"><div class="row-label">主题</div><div class="row-desc">「跟随系统」会随 Windows 的深色/浅色模式自动切换，浮框同样适用。</div></div>
+            <div class="seg" id="setTheme" role="group" aria-label="主题"><button data-v="system"><i class="ic" data-icon="monitor" data-size="14"></i>跟随系统</button><button data-v="light"><i class="ic" data-icon="sun" data-size="14"></i>浅色</button><button data-v="dark"><i class="ic" data-icon="moon" data-size="14"></i>深色</button></div></div>
+        </section>
+        <section data-pane="library" class="hidden">
+          <div class="row"><div class="row-main"><div class="row-label">默认排序</div><div class="row-desc">筛选 / 搜索时列表的默认排序方式。</div></div>
+            <select class="input" id="setSort" aria-label="默认排序">
+              <option value="recent">最近使用</option>
+              <option value="updated">最近更新</option>
+              <option value="name">名称 A–Z</option>
+            </select></div>
+          <div class="row"><div class="row-main"><div class="row-label">应用角色系统提示</div><div class="row-desc">复制结果、预览与 AI 试跑时，自动前置当前角色的系统提示（可用「---」分隔）。</div></div>
+            <label class="switch"><input type="checkbox" id="setApplyRoleSys" aria-label="应用角色系统提示" checked><span class="slider"></span></label></div>
+          <div class="row col"><div class="row-main"><div class="row-label">数据维护</div><div class="row-desc">完整备份包含提示词、设置与版本历史。</div></div>
+            <div class="about-actions">
+              <button class="btn secondary sm" id="setBackup"><i class="ic" data-icon="archive" data-size="14"></i>完整备份…</button>
+              <button class="btn secondary sm" id="setRestore"><i class="ic" data-icon="undo" data-size="14"></i>从备份恢复…</button>
+            </div>
+          </div>
+        </section>
+        <section data-pane="ai" class="hidden">
+          <div class="row col">
+            <div class="row-main">
+              <div class="row-label">模型配置</div>
+              <div class="row-desc">支持国际（OpenAI / Anthropic / Gemini）、国产（通义、智谱、DeepSeek、Kimi、百川、豆包）与聚合（OpenRouter、SiliconFlow、一API 自定义）。API Key 仅存本机（Windows 使用 DPAPI 加密），不会写入日志。未配置时应用仍可离线使用。</div>
+            </div>
+            <div class="about-actions" style="margin-bottom:8px">
+              <button class="btn primary sm" id="aiAddProfile"><i class="ic" data-icon="plus" data-size="14"></i>添加厂商</button>
+            </div>
+            <div class="ai-prov-list" id="aiProvList"></div>
+          </div>
+        </section>
+        <section data-pane="startup" class="hidden">
+          <div class="row"><div class="row-main"><div class="row-label">开机自启</div><div class="row-desc">登录 Windows 后在托盘静默启动，随时输入 // 唤醒。</div></div>
+            <label class="switch"><input type="checkbox" id="setAutostart" aria-label="开机自启"><span class="slider"></span></label></div>
+          <div class="row"><div class="row-main">
+              <div class="row-label">以管理员身份启动（可在管理员窗口中唤醒）
+                <span class="tip" tabindex="0" role="button" aria-describedby="adminTip"><i class="ic" data-icon="info" data-size="14"></i>
+                  <span class="tip-body" role="tooltip" id="adminTip">Windows 不允许普通程序接收“以管理员身份运行”的窗口里的按键（权限隔离），所以默认在这些窗口中输入 // 不会弹出。<br><br>开启后会创建一个 Windows 计划任务，让提示词 Builder 以管理员身份启动：<b>只在开启时确认一次 UAC</b>，以后开机自启、双击图标打开都不再弹窗。<br><br>关闭后删除该计划任务，恢复普通权限。<br>注意：管理员身份下无法从资源管理器拖放文件到窗口。</span></span>
+              </div>
+              <div class="row-desc" id="adminDesc">默认关闭。开启时需要确认一次 UAC。</div></div>
+            <label class="switch"><input type="checkbox" id="setAdmin" aria-label="以管理员身份启动"><span class="slider"></span></label></div>
+          <div class="callout hidden" id="adminCallout"></div>
+        </section>
+        <section data-pane="about" class="hidden">
+          <div class="about">
+            <div class="logo lg" aria-hidden="true">//</div>
+            <div><div class="about-name">提示词 Builder</div><div class="muted" id="aboutVer">—</div></div>
+          </div>
+          <div class="about-actions">
+            <button class="btn secondary sm" id="aboutOnboarding"><i class="ic" data-icon="sparkles" data-size="14"></i>新手引导</button>
+            <button class="btn secondary sm" id="aboutHelp"><i class="ic" data-icon="keyboard" data-size="14"></i>快捷键</button>
+            <button class="btn secondary sm" id="aboutData"><i class="ic" data-icon="folder" data-size="14"></i>打开数据文件夹</button>
+          </div>
+          <div class="note" id="aboutNote">—</div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- help: shortcuts + syntax -->
+<div class="overlay hidden" id="helpOverlay">
+  <div class="modal help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-head"><h2 id="helpTitle">帮助</h2>
+      <div class="seg" role="tablist" id="helpTabs"><button data-h="keys" class="active">快捷键</button><button data-h="syntax">变量语法</button></div>
+      <span class="spacer"></span><button class="btn ghost icon" data-close aria-label="关闭"><i class="ic" data-icon="x"></i></button></div>
+    <div class="modal-body" id="helpBody"></div>
+    <div class="modal-foot"><button class="btn ghost sm" id="helpOnboarding"><i class="ic" data-icon="sparkles" data-size="14"></i>重新查看新手引导</button><span class="spacer"></span><span class="muted small">随时按 <kbd>F1</kbd> 打开</span></div>
+  </div>
+</div>
+
+<!-- onboarding -->
+<div class="overlay hidden" id="onbOverlay">
+  <div class="modal onb" role="dialog" aria-modal="true" aria-labelledby="onbTitle">
+    <div class="onb-stage" id="onbStage"></div>
+    <div class="modal-foot">
+      <div class="dots" id="onbDots" aria-hidden="true"></div>
+      <span class="spacer"></span>
+      <button class="btn ghost sm" id="onbSkip">跳过</button>
+      <button class="btn secondary sm" id="onbPrev">上一步</button>
+      <button class="btn primary sm" id="onbNext">下一步</button>
+    </div>
+  </div>
+</div>
+
+<!-- confirm -->
+<div class="overlay hidden" id="confirmOverlay">
+  <div class="modal confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMsg">
+    <div class="modal-body"><h2 id="confirmTitle"></h2><p id="confirmMsg"></p></div>
+    <div class="modal-foot"><span class="spacer"></span><button class="btn ghost sm" id="confirmCancel">取消</button><button class="btn primary sm" id="confirmOk">确定</button></div>
+  </div>
+</div>
+
+
+<!-- revisions -->
+<div class="overlay hidden" id="revOverlay">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="revTitle">
+    <div class="modal-head"><h2 id="revTitle">版本历史</h2><span class="spacer"></span>
+      <button class="btn secondary sm" id="revCompareSel" title="对比已勾选的两个版本（或一个与当前）">对比所选</button>
+      <button class="btn secondary sm" id="revSave">保存当前版本</button>
+      <button class="btn ghost icon" data-close aria-label="关闭"><i class="ic" data-icon="x"></i></button></div>
+    <div class="modal-body split" id="revBody">
+      <div class="rev-list" id="revList"></div>
+      <div class="rev-detail" id="revDetail"></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="diffOverlay">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="diffTitle">
+    <div class="modal-head"><h2 id="diffTitle">版本对比</h2><span class="spacer"></span>
+      <div class="seg sm" id="diffModeSeg" role="group" aria-label="对比视图">
+        <button type="button" data-diff-mode="unified" class="active">统一</button>
+        <button type="button" data-diff-mode="split">并排</button>
+      </div>
+      <button class="btn ghost icon" data-close aria-label="关闭"><i class="ic" data-icon="x"></i></button></div>
+    <div class="modal-body" id="diffBody"></div>
+  </div>
+</div>
+
+
+<!-- role system prompt (2.12.8) -->
+<div class="overlay hidden" id="roleSysOverlay">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="roleSysTitle">
+    <div class="modal-head"><h2 id="roleSysTitle">角色系统提示</h2><span class="spacer"></span>
+      <button class="btn primary sm" id="roleSysSave">保存</button>
+      <button class="btn ghost icon" data-close aria-label="关闭"><i class="ic" data-icon="x"></i></button></div>
+    <div class="modal-body">
+      <p class="muted small" id="roleSysHint">为此角色下的提示词提供可选的系统设定。复制 / 预览 / AI 时可自动前置。</p>
+      <textarea class="textarea" id="roleSysEditor" rows="14" spellcheck="false" placeholder="例如：你是资深后端工程师，回答简洁、给出可运行示例…"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- case edit (2.12.8) -->
+<div class="overlay hidden" id="caseOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="caseTitle">
+    <div class="modal-head"><h2 id="caseTitle">编辑用例</h2><span class="spacer"></span>
+      <button class="btn primary sm" id="caseSave">保存</button>
+      <button class="btn ghost icon" data-close aria-label="关闭"><i class="ic" data-icon="x"></i></button></div>
+    <div class="modal-body" id="caseBody">
+      <div class="field"><label class="field-label">名称</label><input class="input" id="caseName" maxlength="60"></div>
+      <div class="field"><label class="field-label">期望输出（软匹配：包含即可）</label><textarea class="textarea" id="caseExpect" rows="4" spellcheck="false"></textarea></div>
+      <div class="field"><label class="field-label">备注</label><input class="input" id="caseNotes" maxlength="200"></div>
+      <div class="muted small" id="caseValsHint">变量值来自当前表单（保存时写入）。</div>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script src="js/icons.js"></script>
+<script src="js/md.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
