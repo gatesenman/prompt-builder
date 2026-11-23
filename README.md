@@ -8,6 +8,19 @@
 - 可用 `PromptBuilder-skills-import.json` 导入技能包。
 - Python 后端 + Web 界面；Windows 下可用 `启动.bat` 或 `run.py`。
 
+## 下载
+
+本仓库目前没有已发布的 GitHub Release 安装包。请从源码运行。GitHub 自动生成的 Source code zip/tar 不算安装包。
+
+## 界面截图
+
+仓库里目前还没有已提交的真实产品界面截图（图标、logo 或品牌图不算）。请不要把下列预留路径当成已经存在的图片去引用（避免破链）。待在真实运行窗口中截取后放入：
+
+- `docs/screenshots/01-workbench.png`
+- `docs/screenshots/02-main-or-result.png`
+
+截图说明必须写明操作系统、软件版本、是否示例/演示数据，以及是否在 Windows 安装后截取。
+
 ## 技术栈
 
 - Python
@@ -57,6 +70,19 @@ Windows 也可双击 `启动.bat`。安装与构建细节见 `docs/INSTALL.md`�
 - Desktop workbench for prompts and skills (see the root README and `docs/`).
 - Import skill packs via `PromptBuilder-skills-import.json`.
 - Python backend plus a web UI; on Windows you can use `启动.bat` or `run.py`.
+
+## Downloads
+
+This repository has no published GitHub Release installer. Run it from source. The automatic Source code zip/tar from GitHub is not an installer.
+
+## Screenshots
+
+No real product-window screenshot has been committed yet (icons, logos, and brand art do not count). Do not add markdown image links to the reserved paths below until the files exist (that would be a broken link). After a live capture, place:
+
+- `docs/screenshots/01-workbench.png`
+- `docs/screenshots/02-main-or-result.png`
+
+Captions must state the OS, version, whether the data is sample/demo, and whether the shot was taken after a Windows install.
 
 ## Tech stack
 
